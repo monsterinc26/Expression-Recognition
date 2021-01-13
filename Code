@@ -1,0 +1,107 @@
+import cv2
+import numpy as np
+import pandas as pd
+import os
+
+images=[]
+labels=[]
+
+path='D:/python/Deep Learning/Datasets/Expression Recognition/ckdata'
+for file_path in os.listdir(path):
+    img_path=path+'/'+file_path
+    #print(img_path)
+    label=img_path.split('/')[-1]
+    print(label)
+    
+    for paths in os.listdir(img_path):
+        main_img_path=img_path+'/'+paths
+        img=cv2.imread(main_img_path)
+        images.append(img)
+        labels.append(label)
+print(images)
+print(labels)
+
+x=np.array(images,dtype=float)
+y=np.array(labels)
+x=x/255
+
+print(x.shape)
+
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D,MaxPooling2D,Dense,Flatten,Dropout,BatchNormalization
+from tensorflow.keras.optimizers import Adam
+        
+le=LabelEncoder()
+new_labels=le.fit_transform(y)   
+new_labels=to_categorical(new_labels)
+
+xtrain,xtest,ytrain,ytest=train_test_split(x,new_labels,test_size=0.2,random_state=1)
+
+aug=ImageDataGenerator(rotation_range=0.5, 
+                       zoom_range=0.15,
+                       width_shift_range=0.2,
+                       height_shift_range=0.2,
+                       shear_range=0.2,
+                       horizontal_flip=True,
+                       fill_mode='nearest')
+
+train_data=aug.flow(xtrain,ytrain)
+test_data=aug.flow(xtest,ytest)
+num_classes=7
+
+model=Sequential()
+model.add(Conv2D(64,kernel_size=(3,3),strides=(1,1),input_shape=(48,48,3),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2),strides=(2,2)))
+model.add(BatchNormalization())
+model.add(Conv2D(128,kernel_size=(3,3),strides=(1,1),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2),strides=(2,2)))
+model.add(BatchNormalization())
+model.add(Conv2D(256,kernel_size=(3,3),strides=(1,1),activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2),strides=(2,2)))
+model.add(BatchNormalization())
+model.add(Flatten())
+model.add(Dense(128,activation='relu'))
+model.add(Dense(64,activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(num_classes,activation='softmax'))
+
+model.summary()
+
+model.compile(optimizer=tf.keras.optimizers.Adam(),loss=tf.keras.losses.categorical_crossentropy,metrics=['accuracy'])
+
+model.fit_generator(train_data,epochs=20,validation_data=test_data)
+
+pred=model.predict(xtest)
+model.evaluate(xtest,ytest)
+
+from sklearn.metrics import confusion_matrix,mean_squared_error,accuracy_score
+import seaborn as sns
+cm=confusion_matrix(np.argmax(ytest,axis=-1),np.argmax(pred,axis=-1))
+print(cm)
+accuracy=accuracy_score(np.argmax(ytest,axis=-1),np.argmax(pred,axis=-1))
+print(accuracy)
+
+print('MSE is',mean_squared_error(pred,ytest))
+
+title='Accuracy - %.2f'%(accuracy)
+sns.heatmap(cm,annot=True,cmap='Blues_r')
+plt.xlabel('Predicted')
+plt.ylabel('Original')
+plt.title(title)
+
+
+import matplotlib.pyplot as plt
+plt.plot(range(1,21),model.history.history['loss'])
+plt.plot(range(1,21),model.history.history['val_loss'])
+plt.title('Loss')
+plt.legend(labels=['loss','val-loss'])
+
+plt.plot(range(1,21),model.history.history['accuracy'])
+plt.plot(range(1,21),model.history.history['val_accuracy'])
+plt.title('Accuracy')
+plt.legend(labels=['Accuracy','val-accuracy'])
